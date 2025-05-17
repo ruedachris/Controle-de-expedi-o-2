@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Controle de Expedição</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #EFEFEF; color: #333333; padding-bottom: env(safe-area-inset-bottom); }
+        :root { 
+            --ml-yellow-original: #FFF159;
+            --ml-yellow: #FFDB58; 
+            --ml-yellow-mais-escuro: #FFC300; 
+            --ml-black: #333333; --ml-dark-gray: #666666; --ml-light-gray: #EFEFEF; 
+            --ml-blue: #3483FA; --ml-green: #00A650; --ml-red: #F23D4F; --ml-orange: #FF7733; 
+        }
+        
+        .parking-grid { display: grid; gap: 8px; grid-template-columns: repeat(9, 1fr); }
+        @media (max-width: 1024px) { .parking-grid { grid-template-columns: repeat(7, 1fr); } }
+        @media (max-width: 768px) { .parking-grid { grid-template-columns: repeat(5, 1fr); } }
+        @media (max-width: 480px) { .parking-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; } }
+        @media (max-width: 380px) { .parking-grid { grid-template-columns: repeat(3, 1fr); gap: 4px; } }
+        .parking-spot { aspect-ratio: 1.2 / 1; border: 2px solid var(--ml-dark-gray); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 0.6rem; font-weight: 600; cursor: default; transition: all 0.2s ease-in-out; border-radius: 4px; position: relative; overflow: hidden; padding: 2px; }
+        .parking-spot.available { background-color: #D1FAE5; border-color: var(--ml-green); color: var(--ml-green); }
+        .parking-spot.occupied { background-color: #FFEDD5; border-color: var(--ml-orange); color: #C2410C; } 
+        .parking-spot.occupied-overtime { background-color: #FEE2E2; border-color: var(--ml-red); color: var(--ml-red); } 
+        .parking-spot.occupied-other-wave { background-color: #FEF3C7; border-color: #F59E0B; color: #B45309; } 
+        .parking-spot:hover { transform: scale(1.02); }
+        .spot-id { font-size: 0.75rem; font-weight: 700; }
+        .vehicle-id-on-spot { font-size: 0.6rem; margin-top: 1px; word-break: break-all; text-align: center; }
+        .spot-timer, .spot-status-gestor { font-size: 0.55rem; color: var(--ml-black); margin-top:1px; font-weight: normal; }
+        
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .modal-overlay.active { opacity: 1; visibility: visible; }
+        .modal-content { background-color: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); width: 90%; }
+        .report-modal-content { max-width: 1150px; width:95%; } 
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(255, 255, 255, 0.9); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+        .loading-spinner { border: 4px solid rgba(0,0,0,0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: var(--ml-blue); animation: spin 1s ease infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .table-auto th, .table-auto td { padding: 0.5rem 0.75rem; border: 1px solid #ddd; text-align: left; font-size: 0.70rem; white-space: nowrap; }
+        .table-auto th { background-color: #f8f9fa; font-weight: 600; }
+        #driver-view input[type="text"] { font-size: 16px; }
+        #driver-view button { -webkit-tap-highlight-color: transparent; }
+        .view-toggle-button { padding: 0.5rem 1rem; border: 1px solid var(--ml-blue); color: var(--ml-blue); border-radius: 0.375rem; transition: background-color 0.2s, color 0.2s; font-size: 0.9rem;}
+        .view-toggle-button:hover { background-color: rgba(52, 131, 250, 0.1); }
+        .view-toggle-button.active { background-color: var(--ml-blue); color: white; font-weight: 600; }
+        .mercado-livre-icon { 
+            display: inline-flex; 
+            align-items: center; 
+            justify-content: center; 
+            width: 32px; 
+            height: 32px;
+            background-color: #FFF159; 
+            color: #000000; 
+            border-radius: 4px;
+            margin-right: 10px;
+            font-size: 18px; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .header-custom-yellow {
+            background-color: var(--ml-yellow); 
+        }
+        .btn-gestor-liberar {
+            background-color: var(--ml-green); color: white;
+            padding: 0.25rem 0.5rem; font-size: 0.7rem;
+            border-radius: 0.25rem; margin-top: 2px;
+        }
+        .btn-gestor-liberar:hover { background-color: #00873f; }
+        .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .kpi-card { background-color: white; padding: 1rem; border-radius: 0.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center;}
+        .kpi-value { font-size: 1.5rem; font-weight: bold; color: var(--ml-blue); }
+        .kpi-label { font-size: 0.8rem; color: var(--ml-dark-gray); margin-top: 0.25rem; }
+    </style>
+</head>
+<body>
+    <div id="loading-indicator" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+    </div>
+
+    <header class="header-custom-yellow p-3 md:p-4 shadow-md sticky top-0 z-50">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center">
+            <h1 class="text-xl md:text-2xl font-bold text-[var(--ml-black)] mb-2 md:mb-0 text-center flex items-center">
+                <span class="mercado-livre-icon"><i class="fas fa-box-archive"></i></span>
+                Controle de Expedição
+            </h1>
+            <div class="flex space-x-2 my-2 md:my-0">
+                <button id="toggle-to-manager-view-btn" class="view-toggle-button">Gestor</button>
+                <button id="toggle-to-driver-view-btn" class="view-toggle-button">Motorista</button>
+            </div>
+            <div class="text-center md:text-right">
+                <p class="text-xs md:text-sm text-[var(--ml-dark-gray)]">Operação Logística (Online)</p>
+                <p id="current-time-display" class="text-base md:text-lg font-semibold">00:00:00</p>
+            </div>
+        </div>
+    </header>
+
+    <main id="manager-view" class="container mx-auto p-2 md:p-4 mt-4 hidden">
+        <div class="mb-6 p-3 md:p-4 bg-white rounded-lg shadow-lg">
+            <div class="flex flex-col md:flex-row justify-between items-center mb-3 md:mb-4">
+                <h2 class="text-xl md:text-2xl font-semibold text-[var(--ml-blue)] mb-2 md:mb-0">Painel do Gestor</h2>
+                <div class="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+                     <button id="refresh-data-btn" class="w-full sm:w-auto px-3 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600 text-sm">
+                        <i class="fas fa-sync-alt mr-1"></i>Atualizar Dados
+                    </button>
+                    <button id="open-reports-modal-btn" class="w-full sm:w-auto px-3 py-2 bg-[var(--ml-orange)] text-white rounded-md hover:bg-opacity-90 text-sm">
+                        <i class="fas fa-file-alt mr-1"></i>Ver Relatórios
+                    </button>
+                </div>
+            </div>
+            <div class="flex flex-col md:flex-row justify-start items-center mb-3">
+                <div class="md:mr-4">
+                    <label for="wave-selector" class="text-sm font-medium text-[var(--ml-dark-gray)] mr-2">Selecionar Onda:</label>
+                    <select id="wave-selector" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-[var(--ml-blue)] focus:border-[var(--ml-blue)] text-sm">
+                    </select>
+                </div>
+                 <button id="liberar-onda1-bolsao-btn" class="ml-auto px-3 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 text-sm">
+                    <i class="fas fa-truck-arrow-right mr-1"></i>Liberar Onda 1 do Bolsão
+                </button>
+            </div>
+             <div id="overtime-notifications-manager" class="mt-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded-md hidden">
+                </div>
+            <div id="kpi-section" class="kpi-grid mt-4">
+                 <div class="kpi-card">
+                    <div id="kpi-total-routes" class="kpi-value">0</div>
+                    <div class="kpi-label">Total de Rotas (CSV)</div>
+                </div>
+                <div class="kpi-card">
+                    <div id="kpi-avg-loading-time" class="kpi-value">--:--</div>
+                    <div class="kpi-label">Tempo Médio Carga</div>
+                </div>
+                <div class="kpi-card">
+                    <div id="kpi-routes-accepted" class="kpi-value">0</div>
+                    <div class="kpi-label">Rotas Aceitas</div>
+                </div>
+                <div class="kpi-card">
+                    <div id="kpi-in-bolsao" class="kpi-value">0</div>
+                    <div class="kpi-label">Veículos no Bolsão</div>
+                </div>
+                <div class="kpi-card">
+                    <div id="kpi-at-dock" class="kpi-value">0</div>
+                    <div class="kpi-label">Veículos na Doca</div>
+                </div>
+                <div class="kpi-card">
+                    <div id="kpi-checked-out" class="kpi-value">0</div>
+                    <div class="kpi-label">Check-outs Realizados</div>
+                </div>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+            <div class="lg:col-span-2 p-3 md:p-4 bg-white rounded-lg shadow-lg">
+                <h3 class="text-lg md:text-xl font-semibold mb-3 md:mb-4 text-[var(--ml-dark-gray)] text-center">Mapa do Pátio (<span id="total-spots-display">0</span> Vagas) - <span id="map-wave-display" class="text-[var(--ml-blue)]">Todas</span></h3>
+                <div id="parking-map-container" class="parking-grid bg-gray-100 p-1 md:p-2 rounded"></div>
+                <div class="mt-3 md:mt-4 flex flex-wrap gap-2 justify-center text-xs">
+                    <span class="flex items-center"><div class="w-3 h-3 rounded-full bg-[#D1FAE5] border border-[var(--ml-green)] mr-1"></div> Disponível</span>
+                    <span class="flex items-center"><div class="w-3 h-3 rounded-full bg-[#FFEDD5] border border-[var(--ml-orange)] mr-1"></div> Ocup. Normal</span>
+                    <span class="flex items-center"><div class="w-3 h-3 rounded-full bg-[#FEE2E2] border border-[var(--ml-red)] mr-1"></div> Ocup. >30min</span>
+                    <span class="flex items-center"><div class="w-3 h-3 rounded-full bg-yellow-200 border border-yellow-500 mr-1"></div> Ocup. Outra Onda</span>
+                </div>
+            </div>
+            <div class="p-3 md:p-4 bg-white rounded-lg shadow-lg">
+                <h3 class="text-lg md:text-xl font-semibold mb-3 md:mb-4 text-[var(--ml-dark-gray)]">Veículos da Onda Selecionada: <span id="selected-wave-vehicles-display" class="text-[var(--ml-blue)]">N/A</span></h3>
+                <div id="expedition-vehicle-list" class="max-h-[450px] overflow-y-auto mb-3 md:mb-4 border rounded-md p-2">
+                    <p class="text-sm text-gray-500">Selecione uma onda para ver os veículos.</p>
+                </div>
+                <div class="mt-3 md:mt-4 pt-3 md:pt-4 border-t">
+                    <h3 class="text-base md:text-lg font-semibold mb-2 text-[var(--ml-dark-gray)]">Importar Veículos (CSV)</h3>
+                    <p class="text-xs text-gray-500 mb-2">
+                        Colunas: Placa, Onda_CSV, Doca_CSV, Rota_Otimizada_CSV, Cluster_CSV, etc.
+                    </p>
+                    <input type="file" id="csv-file-input" accept=".csv,.txt" class="block w-full text-sm text-gray-500 file:mr-2 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-[var(--ml-blue)] file:text-white hover:file:bg-opacity-80 cursor-pointer mb-2">
+                    <button id="import-csv-btn" class="w-full px-3 py-2 bg-[var(--ml-green)] text-white rounded-md hover:bg-opacity-80 text-sm">
+                        <i class="fas fa-file-csv mr-1"></i>Importar CSV para Google Sheets
+                    </button>
+                    <p id="csv-import-status" class="text-xs mt-2"></p>
+                </div>
+                 <button id="initialize-spots-btn" class="mt-3 md:mt-4 w-full px-3 py-2 bg-teal-500 text-white rounded-md hover:bg-teal-600 text-sm">
+                    <i class="fas fa-th-large mr-1"></i>Inicializar Vagas na Planilha
+                </button>
+                <button id="reset-data-btn" class="mt-3 md:mt-4 w-full px-3 py-2 bg-[var(--ml-red)] text-white rounded-md hover:bg-opacity-80 text-sm">
+                    <i class="fas fa-trash-alt mr-1"></i>Resetar Dados na Planilha
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <main id="driver-view" class="container mx-auto p-3 mt-4 mb-16 hidden">
+        <div class="max-w-md mx-auto bg-white rounded-xl shadow-xl p-5">
+            <h2 class="text-2xl font-bold text-center text-[var(--ml-blue)] mb-6">Portal do Motorista</h2>
+            
+            <div id="driver-plate-input-section">
+                <label for="driver-vehicle-plate-input" class="block text-md font-medium text-[var(--ml-dark-gray)] mb-2">Informe sua Placa:</label>
+                <div class="flex mb-2">
+                    <input type="text" id="driver-vehicle-plate-input" placeholder="AAA0A00" class="flex-grow p-3 border border-gray-300 rounded-l-lg shadow-sm focus:ring-[var(--ml-blue)] focus:border-[var(--ml-blue)] uppercase text-lg">
+                    <button id="driver-confirm-plate-btn" class="px-5 py-3 bg-[var(--ml-blue)] text-white rounded-r-lg hover:bg-opacity-90 text-lg">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                <p id="driver-plate-error" class="text-sm text-[var(--ml-red)] mt-1 h-5"></p>
+            </div>
+
+            <div id="driver-route-acceptance-section" class="hidden mt-2 space-y-4 p-4 border rounded-lg bg-gray-50">
+                <h3 class="text-lg font-semibold text-center">Confirme sua Rota</h3>
+                <p><strong>Placa:</strong> <span id="accept-route-plate" class="text-[var(--ml-blue)]"></span></p>
+                <p><strong>Rota Otimizada:</strong> <span id="accept-route-optimized" class="font-semibold"></span></p>
+                <p><strong>Cluster:</strong> <span id="accept-route-cluster" class="font-semibold"></span></p>
+                <p><strong>Onda Designada:</strong> <span id="accept-route-wave" class="font-semibold"></span> (<span id="accept-route-wave-time" class="font-semibold"></span>)</p>
+                <div id="driver-bolsao-notification-acceptance" class="p-2 my-2 text-sm text-center bg-blue-100 border border-blue-300 text-blue-700 rounded-md">
+                </div>
+                <button id="driver-accept-route-btn" class="w-full px-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 text-xl font-semibold shadow-md">
+                    <i class="fas fa-check-circle mr-2"></i>Aceitar Rota e Prosseguir para Bolsão
+                </button>
+                <button id="driver-reject-route-btn" class="w-full mt-2 px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 text-md">Informar Outra Placa</button>
+                <p id="driver-accept-route-status" class="text-md text-center h-6"></p>
+            </div>
+            
+            <div id="driver-actions-section" class="hidden mt-2 space-y-5">
+                <h3 class="text-xl font-semibold text-center">Veículo: <span id="driver-active-plate" class="text-[var(--ml-blue)]"></span></h3>
+                
+                <div id="driver-notification-area" class="p-3 my-3 text-center bg-yellow-200 border border-yellow-500 text-yellow-800 rounded-md hidden">
+                    <p id="driver-notification-message" class="font-semibold text-lg"></p>
+                </div>
+
+                <div id="driver-main-buttons" class="space-y-3">
+                    <button id="driver-arrived-bolsao-btn" class="w-full px-4 py-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-xl font-semibold shadow-md hidden">
+                        <i class="fas fa-parking mr-2"></i>Confirmar Chegada no Bolsão
+                    </button>
+                    <button id="driver-check-in-doca-btn" class="w-full px-4 py-4 bg-[var(--ml-green)] text-white rounded-lg hover:bg-opacity-90 text-xl font-semibold shadow-md hidden">
+                        <i class="fas fa-sign-in-alt mr-2"></i>Fazer Check-in na Doca
+                    </button>
+                    <button id="driver-check-out-btn" class="w-full px-4 py-4 bg-[var(--ml-red)] text-white rounded-lg hover:bg-opacity-90 text-xl font-semibold shadow-md hidden">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Fazer Check-out
+                    </button>
+                </div>
+                <p id="driver-action-status" class="text-md text-center h-6"></p>
+
+                <div class="mt-6 p-4 border border-gray-200 rounded-lg bg-gray-50 text-md space-y-2 shadow">
+                    <p><strong>Status Atual:</strong> <span id="driver-vehicle-status" class="font-semibold">---</span></p>
+                    <p><strong>Onda (Expedição):</strong> <span id="driver-vehicle-wave-csv" class="font-semibold">---</span></p>
+                    <p><strong>Prazo da Onda:</strong> <span id="driver-wave-deadline" class="font-semibold">--:-- até --:--</span></p>
+                    <p><strong>Rota Otimizada:</strong> <span id="driver-route-optimized" class="font-semibold">---</span></p>
+                    <p><strong>Cluster:</strong> <span id="driver-cluster" class="font-semibold">---</span></p>
+                    <p><strong>Vaga/Doca Designada:</strong> <span id="driver-assigned-spot" class="font-bold text-[var(--ml-green)] text-2xl">---</span></p>
+                    <div id="driver-loading-timer-section"> 
+                        <p class="text-lg font-semibold text-center">Tempo para Carregar (Máx.):</p>
+                        <p id="driver-loading-time-remaining" class="font-bold text-[var(--ml-orange)] text-3xl text-center">--:--</p>
+                    </div>
+                </div>
+                 <button id="driver-change-plate-btn" class="mt-5 w-full px-3 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 text-md shadow-sm">
+                    <i class="fas fa-exchange-alt mr-1"></i>Informar Outra Placa
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <div id="reports-modal" class="modal-overlay">
+        <div class="modal-content report-modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h4 class="text-xl md:text-2xl font-bold text-[var(--ml-blue)]">Relatório de Operações</h4>
+                <button id="close-reports-modal-btn" class="text-gray-500 hover:text-gray-700 text-xl md:text-2xl">&times;</button>
+            </div>
+            <div class="mb-4">
+                <button id="export-operations-csv-btn" class="px-4 py-2 bg-[var(--ml-green)] text-white rounded-md hover:bg-opacity-90 text-sm">
+                    <i class="fas fa-file-excel mr-1"></i>Exportar Tabela para CSV
+                </button>
+            </div>
+            <div class="max-h-[60vh] overflow-y-auto">
+                <table class="table-auto w-full">
+                    <thead>
+                        <tr>
+                            <th>ID Log</th><th>Timestamp Completo</th><th>Data Evento</th><th>Hora Evento</th><th>Evento</th><th>Placa</th><th>Vaga</th>
+                            <th>Onda (Log)</th><th>Doca (Log)</th><th>Transportadora (Log)</th>
+                            <th>Rota Otimizada (Log)</th><th>Cluster (Log)</th>
+                            <th>H. Aceite Rota</th><th>H. Entrada Bolsão</th><th>H. Chamada Doca</th><th>H. Lib. Doca</th>
+                        </tr>
+                    </thead>
+                    <tbody id="operations-report-table-body"></tbody>
+                </table>
+            </div>
+            <p id="reports-modal-status" class="text-xs mt-3"></p>
+        </div>
+    </div>
+
+    <script>
+        // --- Funções Utilitárias de Formatação e Tempo (Definidas no início) ---
+        function showLoading(show) { loadingIndicator.classList.toggle('hidden', !show); }
+        
+        function getCurrentBrasiliaTime() {
+            return new Date(new Date().toLocaleString("en-US", {timeZone: TIMEZONE_BRASILIA}));
+        }
+
+        function formatTime(date, includeSeconds = false, useTimeZone = true) {
+            if (!date || !(date instanceof Date) || isNaN(date)) return '--:--';
+            const options = { hour: '2-digit', minute: '2-digit', hour12: false };
+            if (useTimeZone) options.timeZone = TIMEZONE_BRASILIA;
+            if (includeSeconds) options.second = '2-digit';
+            return date.toLocaleTimeString('pt-BR', options);
+        }
+
+        function formatDuration(ms, showSeconds = true) {
+            if (ms === null || isNaN(ms)) return showSeconds ? '--:--:--' : '--:--';
+            const isNegative = ms < 0;
+            if (isNegative) return "Encerrado"; 
+
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+            
+            if (hours > 0 && showSeconds) return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            if (showSeconds) return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`; 
+            return `${String(minutes).padStart(2, '0')}`; 
+        }
+        
+        function formatDate(dateString) { 
+            if (!dateString) return '---';
+            const date = new Date(dateString); 
+            if (isNaN(date.getTime())) return '---';
+            const optionsDate = { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: TIMEZONE_BRASILIA };
+            const optionsTime = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: TIMEZONE_BRASILIA };
+            return `${date.toLocaleDateString('pt-BR', optionsDate)} ${date.toLocaleTimeString('pt-BR', optionsTime)}`;
+        }
+        function formatDateForReport(dateString) { 
+            if (!dateString) return '---';
+            const date = new Date(dateString); 
+            if (isNaN(date.getTime())) return '---';
+            const optionsDate = { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: TIMEZONE_BRASILIA };
+            return `${date.toLocaleDateString('pt-BR', optionsDate)}`;
+        }
+        function formatTimeForReport(dateString) {
+             if (!dateString) return '---';
+            const date = new Date(dateString); 
+            if (isNaN(date.getTime())) return '---';
+            const optionsTime = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, timeZone: TIMEZONE_BRASILIA };
+            return `${date.toLocaleTimeString('pt-BR', optionsTime)}`;
+        }
+
+        function getDateForWaveComparison(timeStr) { 
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            const date = new Date(currentBrasiliaTime); 
+            date.setHours(hours, minutes, 0, 0);
+            return date;
+        }
+
+        // --- Configurações Globais ---
+        const NUM_SPOTS_CONFIG = 43;
+        const DEFAULT_LOADING_DURATION_MINUTES = 30;
+        const PRE_WAVE_BOLSAO_MINUTES = 15; 
+        const WAVES_CONFIG = [ 
+            { name: "Onda 1", start: "07:45", end: "08:15" }, { name: "Onda 2", start: "08:15", end: "08:45" },
+            { name: "Onda 3", start: "08:45", end: "09:15" }, { name: "Onda 4", start: "09:15", end: "09:45" },
+            { name: "Onda 5", start: "09:45", end: "10:15" },
+        ];
+        const APPS_SCRIPT_API_URL = "https://script.google.com/macros/s/AKfycbx3RjrXzj7NJtESBJPZD5wCcaHUzlsMzNVW2QHtMu52KxgWdyldDCjaIx8WH6PNoLoGtw/exec";
+        const TIMEZONE_BRASILIA = "America/Sao_Paulo"; 
+        const MANAGER_PASSWORD = "SSP6@maua"; 
+
+        // Status dos Veículos
+        const STATUS_AGUARDANDO_ACEITE = "Aguardando_Aceite_Rota";
+        const STATUS_AGUARDANDO_BOLSAO = "Aguardando_Bolsao";
+        const STATUS_NO_BOLSAO = "No_Bolsao";
+        const STATUS_LIBERADO_ENTRADA_DOCA = "Liberado_Entrada_Doca"; 
+        const STATUS_CHAMADO_DOCA_AUTO = "Chamado_Doca_Auto"; 
+        const STATUS_NA_VAGA = "Na_Vaga";
+        const STATUS_FINALIZADO = "Finalizado";
+
+        // --- Variáveis de Estado Globais ---
+        let allVehiclesData = []; 
+        let allSpotsData = [];    
+        let allOperationLogs = [];
+        
+        let currentBrasiliaTime = new Date(); 
+        let currentSystemWaveIndex = -2; 
+        
+        let activeDriverPlate = null; 
+        let activeDriverVehicleData = null; 
+        let driverLoadingInterval = null; 
+        let dataRefreshInterval = null;
+        let selectedWaveForManager = "Todas"; 
+        let managerAuthenticated = false; 
+
+        // --- DOM Elements ---
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const currentTimeDisplay = document.getElementById('current-time-display'); 
+        
+        const managerViewBtn = document.getElementById('toggle-to-manager-view-btn');
+        const driverViewBtn = document.getElementById('toggle-to-driver-view-btn');
+        const managerViewDiv = document.getElementById('manager-view');
+        const driverViewDiv = document.getElementById('driver-view');
+
+        // const simulateTimeBtn = document.getElementById('simulate-time-btn'); // Removido
+        const resetDataBtn = document.getElementById('reset-data-btn');
+        const refreshDataBtn = document.getElementById('refresh-data-btn');
+        const initializeSpotsBtn = document.getElementById('initialize-spots-btn');
+        const parkingMapContainer = document.getElementById('parking-map-container');
+        const totalSpotsDisplay = document.getElementById('total-spots-display');
+        const expeditionVehicleList = document.getElementById('expedition-vehicle-list');
+        const csvFileInput = document.getElementById('csv-file-input');
+        const importCsvBtn = document.getElementById('import-csv-btn');
+        const csvImportStatus = document.getElementById('csv-import-status');
+        // const managerSelectedWaveName = document.getElementById('manager-selected-wave-name'); // Removido da UI
+        // const managerSelectedWaveTime = document.getElementById('manager-selected-wave-time'); // Removido da UI
+        const waveSelector = document.getElementById('wave-selector');
+        const mapWaveDisplay = document.getElementById('map-wave-display');
+        const selectedWaveVehiclesDisplay = document.getElementById('selected-wave-vehicles-display');
+        const overtimeNotificationsManager = document.getElementById('overtime-notifications-manager');
+        const liberarOnda1BolsaoBtn = document.getElementById('liberar-onda1-bolsao-btn');
+
+
+        const kpiTotalRoutes = document.getElementById('kpi-total-routes'); 
+        const kpiAvgLoadingTime = document.getElementById('kpi-avg-loading-time');
+        const kpiRoutesAccepted = document.getElementById('kpi-routes-accepted');
+        const kpiInBolsao = document.getElementById('kpi-in-bolsao');
+        const kpiAtDock = document.getElementById('kpi-at-dock');
+        const kpiCheckedOut = document.getElementById('kpi-checked-out');
+
+        const openReportsModalBtn = document.getElementById('open-reports-modal-btn');
+        const reportsModal = document.getElementById('reports-modal');
+        const closeReportsModalBtn = document.getElementById('close-reports-modal-btn');
+        const exportOperationsCsvBtn = document.getElementById('export-operations-csv-btn');
+        const operationsReportTableBody = document.getElementById('operations-report-table-body');
+        const reportsModalStatus = document.getElementById('reports-modal-status');
+
+        const driverPlateInputSection = document.getElementById('driver-plate-input-section');
+        const driverVehiclePlateInput = document.getElementById('driver-vehicle-plate-input');
+        const driverConfirmPlateBtn = document.getElementById('driver-confirm-plate-btn');
+        const driverPlateError = document.getElementById('driver-plate-error');
+        
+        const driverRouteAcceptanceSection = document.getElementById('driver-route-acceptance-section');
+        const acceptRoutePlate = document.getElementById('accept-route-plate');
+        const acceptRouteOptimized = document.getElementById('accept-route-optimized');
+        const acceptRouteCluster = document.getElementById('accept-route-cluster');
+        const acceptRouteWave = document.getElementById('accept-route-wave');
+        const acceptRouteWaveTime = document.getElementById('accept-route-wave-time');
+        const driverBolsaoNotificationAcceptance = document.getElementById('driver-bolsao-notification-acceptance');
+        const driverAcceptRouteBtn = document.getElementById('driver-accept-route-btn');
+        const driverRejectRouteBtn = document.getElementById('driver-reject-route-btn');
+        const driverAcceptRouteStatus = document.getElementById('driver-accept-route-status');
+
+        const driverActionsSection = document.getElementById('driver-actions-section');
+        const driverActivePlateDisplay = document.getElementById('driver-active-plate');
+        const driverNotificationArea = document.getElementById('driver-notification-area');
+        const driverNotificationMessage = document.getElementById('driver-notification-message');
+        
+        const driverMainButtons = document.getElementById('driver-main-buttons');
+        const driverArrivedBolsaoBtn = document.getElementById('driver-arrived-bolsao-btn');
+        const driverCheckInDocaBtn = document.getElementById('driver-check-in-doca-btn'); 
+        const driverCheckOutBtn = document.getElementById('driver-check-out-btn');
+        
+        const driverActionStatus = document.getElementById('driver-action-status');
+        const driverVehicleStatus = document.getElementById('driver-vehicle-status');
+        const driverVehicleWaveCsv = document.getElementById('driver-vehicle-wave-csv');
+        const driverWaveDeadlineDisplay = document.getElementById('driver-wave-deadline'); 
+        const driverRouteOptimizedDisplay = document.getElementById('driver-route-optimized'); 
+        const driverClusterDisplay = document.getElementById('driver-cluster'); 
+        const driverAssignedSpot = document.getElementById('driver-assigned-spot');
+        // const driverCheckinTimeDisplay = document.getElementById('driver-checkin-time'); // Removido da tela
+        const driverChangePlateBtn = document.getElementById('driver-change-plate-btn');
+        const driverLoadingTimerSection = document.getElementById('driver-loading-timer-section');
+        const driverLoadingTimeRemaining = document.getElementById('driver-loading-time-remaining');
+
+        // --- Funções de Interação com API (Google Apps Script) ---
+        async function callAppsScriptAPI(method, params = {}) {
+            if (APPS_SCRIPT_API_URL === "SUA_URL_DO_APPS_SCRIPT_AQUI") {
+                alert("ERRO CRÍTICO: URL da API não configurada.");
+                console.error("URL da API não configurada.");
+                showLoading(false);
+                return { success: false, error: "Configuração: URL da API não definida." };
+            }
+            showLoading(true);
+            let urlToCall = APPS_SCRIPT_API_URL;
+            const fetchOptions = { method: method, redirect: "follow" };
+
+            if (method === 'GET') {
+                const urlObj = new URL(APPS_SCRIPT_API_URL);
+                Object.keys(params).forEach(key => urlObj.searchParams.append(key, params[key]));
+                urlToCall = urlObj.toString();
+                console.log("[FRONTEND] GET:", urlToCall);
+            } else { 
+                fetchOptions.body = JSON.stringify(params);
+                fetchOptions.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
+                console.log("[FRONTEND] POST:", urlToCall, "Payload:", JSON.stringify(params).substring(0,200)+"...");
+            }
+
+            try {
+                const response = await fetch(urlToCall, fetchOptions);
+                console.log("[FRONTEND] API Resposta - Status:", response.status, "OK:", response.ok);
+                const responseText = await response.text();
+                console.log("[FRONTEND] API Resposta (Texto):", responseText.substring(0,500)+"...");
+
+                if (!response.ok) {
+                    let errorDetail = `Status ${response.status}: ${response.statusText}. `;
+                    if (responseText.toLowerCase().includes("<html") && responseText.toLowerCase().includes("google.com")) {
+                        errorDetail += "A API retornou HTML (possível página de login/erro do Google). Verifique as permissões de implantação do Apps Script (deve ser 'Qualquer pessoa').";
+                    } else {
+                        errorDetail += `Detalhe: ${responseText.substring(0,200)}`;
+                    }
+                    throw new Error(errorDetail);
+                }
+                
+                let result;
+                try {
+                    result = JSON.parse(responseText);
+                } catch (jsonError) {
+                    console.error("[FRONTEND] Erro ao parsear JSON da resposta:", jsonError, "Texto original:", responseText);
+                    if (responseText.toLowerCase().includes("<html") && responseText.toLowerCase().includes("google.com")) {
+                         throw new Error("A API retornou HTML, possivelmente uma página de login do Google. Verifique as permissões de implantação do Apps Script (deve ser 'Qualquer pessoa' ou 'Qualquer pessoa, mesmo anônimos').");
+                    }
+                    throw new Error(`Resposta da API não é um JSON válido: ${responseText.substring(0,100)}...`);
+                }
+                
+                showLoading(false);
+                if (result && result.hasOwnProperty('success') && !result.success) {
+                     console.error("[FRONTEND] Erro lógico da API:", result.error, result.details);
+                     alert(`Erro da API: ${result.error || 'Erro desconhecido retornado pela API.'}`);
+                }
+                return result;
+
+            } catch (error) { 
+                console.error("[FRONTEND] Erro no fetch/processamento:", error);
+                alert(`Erro de comunicação: ${error.message}. Verifique o console.`);
+                showLoading(false);
+                return { success: false, error: error.message, name: error.name, details: error.toString() };
+            }
+        }
+
+        // --- Funções de Lógica e UI ---
+        async function fetchInitialData(isSilent = false) {
+            if(!isSilent) console.log("fetchInitialData chamado");
+            const result = await callAppsScriptAPI('GET', { action: 'getInitialData' });
+            if (result && result.success && result.data) {
+                allVehiclesData = result.data.veiculos || [];
+                allSpotsData = result.data.vagas || [];
+                allOperationLogs = result.data.operacoes || [];
+                if(!isSilent) console.log("Dados carregados:", {vehicles: allVehiclesData.length, spots: allSpotsData.length, logs: allOperationLogs.length});
+                
+                populateWaveSelector(); 
+                updateManagerUI();
+                if (activeDriverPlate) {
+                    const driverVehicle = allVehiclesData.find(v => v.Placa && v.Placa.toUpperCase() === activeDriverPlate.toUpperCase());
+                    activeDriverVehicleData = driverVehicle || null;
+                    if (activeDriverVehicleData && activeDriverVehicleData.Status_Veiculo === STATUS_AGUARDANDO_ACEITE) {
+                        showRouteAcceptanceUI();
+                    } else if (activeDriverVehicleData) {
+                        showDriverActionsUI();
+                    } else { 
+                        resetDriverView();
+                    }
+                }
+                calculateAndDisplayKPIs(); 
+
+            } else {
+                if(!isSilent) console.error("Falha ao carregar dados. Resposta:", result);
+                if (managerViewDiv.style.display !== 'none' && !managerViewDiv.classList.contains('hidden')) {
+                    expeditionVehicleList.innerHTML = '<p class="text-sm text-red-500">Erro ao carregar veículos.</p>';
+                    parkingMapContainer.innerHTML = '<p class="text-sm text-red-500">Erro ao carregar vagas.</p>';
+                }
+            }
+        }
+        
+        function updateHeaderTimeDisplay() {
+            currentTimeDisplay.textContent = formatTime(currentBrasiliaTime, true);
+        }
+        
+        function determineCurrentSystemWave() { 
+            const currentTimeStr = formatTime(currentBrasiliaTime); 
+            let newWaveIndex = -2;
+            if (WAVES_CONFIG.length === 0) { currentSystemWaveIndex = -1; return; }
+            if (currentTimeStr < WAVES_CONFIG[0].start) newWaveIndex = -2;
+            else {
+                for (let i = 0; i < WAVES_CONFIG.length; i++) {
+                    if (currentTimeStr >= WAVES_CONFIG[i].start && currentTimeStr < WAVES_CONFIG[i].end) {
+                        newWaveIndex = i; break;
+                    }
+                }
+                if (newWaveIndex === -2 && currentTimeStr >= WAVES_CONFIG[WAVES_CONFIG.length - 1].end) newWaveIndex = -1;
+            }
+            if (currentSystemWaveIndex !== newWaveIndex) currentSystemWaveIndex = newWaveIndex;
+        }
+
+        function populateWaveSelector() {
+            const currentSelected = waveSelector.value;
+            waveSelector.innerHTML = '<option value="Todas">Todas as Ondas</option>';
+            WAVES_CONFIG.forEach(wave => {
+                const option = document.createElement('option');
+                option.value = wave.name;
+                option.textContent = `${wave.name} (${wave.start}-${wave.end})`;
+                waveSelector.appendChild(option);
+            });
+            if (WAVES_CONFIG.some(w => w.name === currentSelected)) {
+                waveSelector.value = currentSelected;
+            } else {
+                 waveSelector.value = "Todas"; 
+            }
+        }
+
+        // --- Funções da Interface do GESTOR ---
+        function updateManagerUI() {
+            updateParkingMap(selectedWaveForManager); 
+            updateManagerSpotTimers(); 
+            updateExpeditionVehicleList(selectedWaveForManager); 
+            calculateAndDisplayKPIs();
+        }
+
+        async function handleCSVImport() {
+            const file = csvFileInput.files[0];
+            if (!file) { csvImportStatus.textContent = 'Selecione um CSV.'; csvImportStatus.className = 'text-xs mt-2 text-red-500'; return; }
+            csvImportStatus.textContent = 'Processando...'; csvImportStatus.className = 'text-xs mt-2 text-blue-500';
+            
+            const reader = new FileReader();
+            reader.onload = async function(event) {
+                try {
+                    const parsedCSV = parseCSVText(event.target.result);
+                    if (!parsedCSV.headers || parsedCSV.rows.length === 0) throw new Error("CSV inválido.");
+                    
+                    const vehiclesToImport = parsedCSV.rows.map(rowArray => {
+                        const rawVehicleData = {};
+                        parsedCSV.headers.forEach((header, index) => {
+                            if (rowArray[index] !== undefined && rowArray[index] !== null) {
+                                rawVehicleData[header.trim()] = String(rowArray[index]).trim();
+                            }
+                        });
+                        const placaKey = parsedCSV.headers.find(h => h.toLowerCase() === 'placa');
+                        if (!placaKey || !rawVehicleData[placaKey] || String(rawVehicleData[placaKey]).trim() === '') return null;
+                        return { id: String(rawVehicleData[placaKey]).toUpperCase(), dataFromCSV: rawVehicleData };
+                    }).filter(v => v);
+
+                    if(vehiclesToImport.length === 0){ csvImportStatus.textContent = 'Nenhum veículo válido no CSV.'; csvImportStatus.className = 'text-xs mt-2 text-orange-500'; return; }
+
+                    csvImportStatus.textContent = `Enviando ${vehiclesToImport.length} veículos...`;
+                    const result = await callAppsScriptAPI('POST', { action: 'importarCSVDados', payload: { vehicles: vehiclesToImport } });
+
+                    if (result && result.success) {
+                        csvImportStatus.textContent = (result.data && result.data.message) || `${vehiclesToImport.length} veículos processados.`;
+                        csvImportStatus.className = 'text-xs mt-2 text-green-500';
+                        await fetchInitialData(); 
+                    } else {
+                        csvImportStatus.textContent = `Erro: ${result ? result.error : "Falha na API"}`;
+                        csvImportStatus.className = 'text-xs mt-2 text-red-500';
+                    }
+                } catch (error) {
+                    csvImportStatus.textContent = `Erro CSV: ${error.message}`; csvImportStatus.className = 'text-xs mt-2 text-red-500';
+                } finally { csvFileInput.value = ''; }
+            };
+            reader.readAsText(file, 'ISO-8859-1'); 
+        }
+
+        function parseCSVText(str) { 
+            const arr = []; let quote = false; let row = 0; let col = 0;
+            const delimiter = str.substring(0, str.indexOf('\n')).includes(';') ? ';' : ',';
+            for (let c = 0; c < str.length; c++) {
+                let cr = str[c]; let nc = str[c+1];
+                arr[row] = arr[row] || []; arr[row][col] = arr[row][col] || '';
+                if (cr == '"') { if (quote && nc == '"') { arr[row][col] += cr; ++c; } else { quote = !quote; } continue; }
+                if (cr == delimiter && !quote) { ++col; arr[row][col] = ''; continue; }
+                if ((cr == '\n' || cr == '\r') && !quote) { if (nc == '\n' && cr == '\r') ++c; ++row; col = 0; arr[row] = []; arr[row][col] = ''; continue; }
+                arr[row][col] += cr;
+            }
+            if (arr.length === 0) return { headers: [], rows: [] };
+            return { headers: arr[0].map(h => String(h).trim()), rows: arr.slice(1) };
+        }
+
+        function updateParkingMap(selectedWave) {
+            parkingMapContainer.innerHTML = '';
+            mapWaveDisplay.textContent = selectedWave === "Todas" ? "Todas as Ondas" : selectedWave;
+            if (!allSpotsData || allSpotsData.length === 0) {
+                 parkingMapContainer.innerHTML = '<p class="text-center text-gray-500 col-span-full">Vagas não carregadas.</p>';
+                 totalSpotsDisplay.textContent = 0; return;
+            }
+            totalSpotsDisplay.textContent = allSpotsData.length;
+            let overtimeNotificationsHTML = "";
+
+            allSpotsData.forEach(spot => {
+                const spotDiv = document.createElement('div');
+                let spotClass = spot.Status_Vaga === 'Disponível' ? 'available' : 'occupied';
+                let vehicleOnSpot = null;
+                let vehicleStatusText = "";
+
+                if (spot.Status_Vaga === 'Ocupada' && spot.Placa_Veiculo_Atual) {
+                    vehicleOnSpot = allVehiclesData.find(v => v.Placa === spot.Placa_Veiculo_Atual);
+                    if (vehicleOnSpot) {
+                        if (selectedWave !== "Todas" && vehicleOnSpot.Onda_CSV !== selectedWave) {
+                            spotClass = 'occupied-other-wave'; 
+                        } else if (vehicleOnSpot.Horario_Ultimo_CheckIn) { 
+                            const timeInSpotMs = currentBrasiliaTime - new Date(vehicleOnSpot.Horario_Ultimo_CheckIn);
+                            if (timeInSpotMs > (DEFAULT_LOADING_DURATION_MINUTES * 60000)) {
+                                spotClass = 'occupied-overtime';
+                                overtimeNotificationsHTML += `<p class="text-sm">- Vaga ${spot.ID_Vaga} (${spot.Placa_Veiculo_Atual}) excedeu ${DEFAULT_LOADING_DURATION_MINUTES} min.</p>`;
+                            }
+                        }
+                        vehicleStatusText = `<span class="spot-status-gestor">${vehicleOnSpot.Status_Veiculo ? vehicleOnSpot.Status_Veiculo.replace(/_/g, ' ') : ''}</span>`;
+                    }
+                }
+                
+                spotDiv.className = `parking-spot ${spotClass}`;
+                spotDiv.dataset.spotId = spot.ID_Vaga;
+                const spotIdSpan = document.createElement('span');
+                spotIdSpan.className = 'spot-id'; spotIdSpan.textContent = spot.ID_Vaga;
+                spotDiv.appendChild(spotIdSpan);
+
+                if (spot.Status_Vaga === 'Ocupada' && spot.Placa_Veiculo_Atual) {
+                    const vehicleIdSpan = document.createElement('span');
+                    vehicleIdSpan.className = 'vehicle-id-on-spot';
+                    vehicleIdSpan.textContent = spot.Placa_Veiculo_Atual.substring(0,10);
+                    spotDiv.appendChild(vehicleIdSpan);
+                    spotDiv.innerHTML += vehicleStatusText; 
+
+                    const timerSpan = document.createElement('span');
+                    timerSpan.className = 'spot-timer';
+                    timerSpan.id = `timer-manager-${spot.ID_Vaga}`;
+                    let timeRef = null;
+                    if (vehicleOnSpot) {
+                        switch(vehicleOnSpot.Status_Veiculo) {
+                            case STATUS_NA_VAGA: timeRef = vehicleOnSpot.Horario_Ultimo_CheckIn; break;
+                            case STATUS_CHAMADO_DOCA_AUTO: case STATUS_LIBERADO_ENTRADA_DOCA: timeRef = vehicleOnSpot.Horario_Chamada_Doca || vehicleOnSpot.Horario_Liberacao_Entrada_Doca; break;
+                            case STATUS_NO_BOLSAO: timeRef = vehicleOnSpot.Horario_Entrada_Bolsao; break;
+                            case STATUS_AGUARDANDO_BOLSAO: timeRef = vehicleOnSpot.Horario_Aceite_Rota; break;
+                            default: timeRef = spot.Horario_Ocupacao; 
+                        }
+                    } else { timeRef = spot.Horario_Ocupacao; }
+                    timerSpan.textContent = timeRef ? formatDuration(currentBrasiliaTime - new Date(timeRef)) : '00:00:00';
+                    spotDiv.appendChild(timerSpan);
+                }
+                parkingMapContainer.appendChild(spotDiv);
+            });
+            if (overtimeNotificationsManager) {
+                if (overtimeNotificationsHTML) {
+                    overtimeNotificationsManager.innerHTML = '<p class="font-semibold mb-1">Alertas de Tempo Excedido:</p>' + overtimeNotificationsHTML;
+                    overtimeNotificationsManager.classList.remove('hidden');
+                } else {
+                    overtimeNotificationsManager.classList.add('hidden');
+                }
+            }
+        }
+
+        function updateManagerSpotTimers() { 
+            allSpotsData.forEach(spot => {
+                if (spot.Status_Vaga === 'Ocupada' && spot.Placa_Veiculo_Atual) {
+                    const timerDisplay = document.getElementById(`timer-manager-${spot.ID_Vaga}`);
+                    if (timerDisplay) {
+                        const vehicleOnSpot = allVehiclesData.find(v => v.Placa === spot.Placa_Veiculo_Atual);
+                        let timeRef = null;
+                        if (vehicleOnSpot) {
+                             switch(vehicleOnSpot.Status_Veiculo) {
+                                case STATUS_NA_VAGA: timeRef = vehicleOnSpot.Horario_Ultimo_CheckIn; break;
+                                case STATUS_CHAMADO_DOCA_AUTO: case STATUS_LIBERADO_ENTRADA_DOCA: timeRef = vehicleOnSpot.Horario_Chamada_Doca || vehicleOnSpot.Horario_Liberacao_Entrada_Doca; break;
+                                case STATUS_NO_BOLSAO: timeRef = vehicleOnSpot.Horario_Entrada_Bolsao; break;
+                                case STATUS_AGUARDANDO_BOLSAO: timeRef = vehicleOnSpot.Horario_Aceite_Rota; break;
+                                default: timeRef = spot.Horario_Ocupacao;
+                            }
+                        } else { timeRef = spot.Horario_Ocupacao; }
+                        timerDisplay.textContent = timeRef ? formatDuration(currentBrasiliaTime - new Date(timeRef)) : '00:00:00';
+                    }
+                }
+            });
+        }
+
+        function updateExpeditionVehicleList(selectedWave) {
+            expeditionVehicleList.innerHTML = '';
+            selectedWaveVehiclesDisplay.textContent = selectedWave === "Todas" ? "Todas as Ondas" : selectedWave;
+            const vehiclesToList = selectedWave === "Todas" ? allVehiclesData : allVehiclesData.filter(v => v.Onda_CSV === selectedWave);
+
+            if (!vehiclesToList || vehiclesToList.length === 0) {
+                expeditionVehicleList.innerHTML = `<p class="text-sm text-gray-500">Nenhum veículo para a onda ${selectedWave}.</p>`; return;
+            }
+
+            vehiclesToList.sort((a,b) => {
+                const statusOrder = [STATUS_CHAMADO_DOCA_AUTO, STATUS_LIBERADO_ENTRADA_DOCA, STATUS_NA_VAGA, STATUS_NO_BOLSAO, STATUS_AGUARDANDO_BOLSAO, STATUS_AGUARDANDO_ACEITE, STATUS_FINALIZADO];
+                const statusA = statusOrder.indexOf(a.Status_Veiculo);
+                const statusB = statusOrder.indexOf(b.Status_Veiculo);
+                if (statusA !== statusB) return statusA - statusB;
+                const timeA = new Date(a.Horario_Aceite_Rota || a.Horario_Entrada_Bolsao || a.Horario_Chamada_Doca || a.Horario_Liberacao_Entrada_Doca || a.Horario_Ultimo_CheckIn || 0);
+                const timeB = new Date(b.Horario_Aceite_Rota || b.Horario_Entrada_Bolsao || b.Horario_Chamada_Doca || b.Horario_Liberacao_Entrada_Doca || b.Horario_Ultimo_CheckIn || 0);
+                return timeA - timeB; 
+            });
+
+            vehiclesToList.forEach(vehicle => { 
+                const div = document.createElement('div');
+                div.className = 'p-2 mb-1.5 border-b text-xs hover:bg-gray-50';
+                let statusText = vehicle.Status_Veiculo ? vehicle.Status_Veiculo.replace(/_/g, ' ') : 'Desconhecido';
+                let timeSinceLastStep = "";
+                let timeRefForCalc = null;
+                let gestorActionButton = "";
+
+                switch(vehicle.Status_Veiculo) {
+                    case STATUS_AGUARDANDO_BOLSAO: timeRefForCalc = vehicle.Horario_Aceite_Rota; break;
+                    case STATUS_NO_BOLSAO: 
+                        timeRefForCalc = vehicle.Horario_Entrada_Bolsao; 
+                        gestorActionButton = `<button class="btn-gestor-liberar" onclick="handleGestorLiberarDoca('${vehicle.Placa}')">Liberar p/ Doca</button>`;
+                        break;
+                    case STATUS_LIBERADO_ENTRADA_DOCA:
+                        statusText = `Liberado p/ Doca ${vehicle.Doca_CSV || ''}`;
+                        timeRefForCalc = vehicle.Horario_Liberacao_Entrada_Doca;
+                        break;
+                    case STATUS_CHAMADO_DOCA_AUTO: 
+                        statusText = `Chamado (Auto) p/ Doca ${vehicle.Doca_CSV || ''}`; 
+                        timeRefForCalc = vehicle.Horario_Chamada_Doca;
+                        break;
+                    case STATUS_NA_VAGA: 
+                        statusText = `Na Vaga ${vehicle.Vaga_Atual || ''}`; 
+                        timeRefForCalc = vehicle.Horario_Ultimo_CheckIn;
+                        break;
+                }
+                if (timeRefForCalc && vehicle.Status_Veiculo !== STATUS_FINALIZADO) {
+                    timeSinceLastStep = ` (há ${formatDuration(currentBrasiliaTime - new Date(timeRefForCalc))})`;
+                }
+
+                div.innerHTML = `
+                    <div class="font-semibold text-gray-700">${vehicle.Placa} <span class="font-normal text-gray-500">(Onda: ${vehicle.Onda_CSV || 'N/A'})</span></div>
+                    <div class="text-blue-600">Status: ${statusText}${timeSinceLastStep}</div>
+                    <div class="text-xs text-gray-500">Doca CSV: ${vehicle.Doca_CSV || 'N/A'} | Rota: ${vehicle.Rota_Otimizada_CSV || 'N/A'} | Cluster: ${vehicle.Cluster_CSV || 'N/A'}</div>
+                    ${gestorActionButton}
+                `;
+                expeditionVehicleList.appendChild(div);
+            });
+        }
+
+        async function handleGestorLiberarDoca(placa) {
+            if (!placa) return;
+            if (!confirm(`Liberar entrada para a doca para o veículo ${placa}?`)) return;
+
+            const result = await callAppsScriptAPI('POST', {
+                action: 'liberarEntradaDoca',
+                payload: { placa: placa, horarioLiberacao: currentBrasiliaTime.toISOString() }
+            });
+            if (result && result.success) {
+                alert((result.data && result.data.message) || `Entrada liberada para ${placa}.`);
+                await fetchInitialData(true);
+            } else {
+                alert(`Falha ao liberar entrada: ${result ? result.error : "Erro na API"}`);
+            }
+        }
+
+
+        function renderOperationsReport() {
+            operationsReportTableBody.innerHTML = '';
+            if (!allOperationLogs || allOperationLogs.length === 0) {
+                operationsReportTableBody.innerHTML = '<tr><td colspan="12" class="text-center text-gray-500 py-4">Nenhum log.</td></tr>'; return;
+            }
+            const sortedLogs = [...allOperationLogs].sort((a,b) => new Date(b.Timestamp_Evento) - new Date(a.Timestamp_Evento));
+            sortedLogs.forEach(log => { 
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${log.ID_Log || '---'}</td> 
+                    <td>${log.Timestamp_Evento ? new Date(log.Timestamp_Evento).toISOString() : '---'}</td> 
+                    <td>${log.Data_Evento_Log || '---'}</td> 
+                    <td>${log.Hora_Evento_Log || '---'}</td> 
+                    <td>${log.Tipo_Evento || '---'}</td> <td>${log.Placa || '---'}</td>
+                    <td>${log.Vaga || '---'}</td> <td>${log.Onda_CSV_Log || '---'}</td>
+                    <td>${log.Doca_CSV_Log || '---'}</td> <td>${log.Transportadora_CSV_Log || '---'}</td>
+                    <td>${log.Rota_Otimizada_CSV_Log || '---'}</td> <td>${log.Cluster_Log || '---'}</td>`;
+                operationsReportTableBody.appendChild(tr);
+            });
+        }
+        
+        function exportReportToCSV() { 
+            if (!allOperationLogs || allOperationLogs.length === 0) { reportsModalStatus.textContent = "Nenhum dado."; return; }
+            reportsModalStatus.textContent = "";
+            const headers = ["ID_Log", "Timestamp_Evento_Completo", "Data_Evento_Log", "Hora_Evento_Log", "Tipo_Evento", "Placa", "Vaga", "Onda_CSV_Log", "Doca_CSV_Log", "Transportadora_CSV_Log", "Rota_Otimizada_CSV_Log", "Cluster_Log", "Horario_Aceite_Rota_Log", "Horario_Entrada_Bolsao_Log", "Horario_Chamada_Doca_Log", "Horario_Liberacao_Doca_Log"];
+            const rows = allOperationLogs.map(log => headers.map(header => {
+                let value = log[header] || '';
+                if (header.startsWith("Horario_") && header.endsWith("_Log") && value) {
+                     value = formatTime(new Date(value), true, false); 
+                } else if (header === "Timestamp_Evento_Completo" && value) {
+                    value = new Date(value).toISOString();
+                }
+                return `"${value}"`;
+            }));
+            let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(e => e.join(",")).join("\n");
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", `relatorio_operacoes_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            reportsModalStatus.textContent = "CSV gerado.";
+        }
+
+        function calculateAndDisplayKPIs() {
+            let totalLoadingTimeMs = 0;
+            let completedLoadsCount = 0;
+            let routesAcceptedCount = 0;
+            let inBolsaoCount = 0;
+            let atDockCount = 0;
+            let checkedOutCount = 0;
+
+            allVehiclesData.forEach(v => {
+                if (v.Status_Veiculo && v.Status_Veiculo !== STATUS_AGUARDANDO_ACEITE) {
+                    routesAcceptedCount++;
+                }
+                if (v.Status_Veiculo === STATUS_NO_BOLSAO) {
+                    inBolsaoCount++;
+                }
+                if (v.Status_Veiculo === STATUS_NA_VAGA) {
+                    atDockCount++;
+                }
+                if (v.Status_Veiculo === STATUS_FINALIZADO) {
+                    checkedOutCount++;
+                     if (v.Horario_Ultimo_CheckIn && v.Horario_Ultimo_CheckOut) {
+                        const checkIn = new Date(v.Horario_Ultimo_CheckIn);
+                        const checkOut = new Date(v.Horario_Ultimo_CheckOut);
+                        const duration = checkOut - checkIn;
+                        if (duration > 0) {
+                            totalLoadingTimeMs += duration;
+                            completedLoadsCount++;
+                        }
+                    }
+                }
+            });
+            
+            const avgLoadingTime = completedLoadsCount > 0 ? formatDuration(totalLoadingTimeMs / completedLoadsCount) : "--:--:--";
+            
+            if(kpiTotalRoutes) kpiTotalRoutes.textContent = allVehiclesData.length; 
+            if(kpiAvgLoadingTime) kpiAvgLoadingTime.textContent = avgLoadingTime;
+            if(kpiRoutesAccepted) kpiRoutesAccepted.textContent = routesAcceptedCount;
+            if(kpiInBolsao) kpiInBolsao.textContent = inBolsaoCount;
+            if(kpiAtDock) kpiAtDock.textContent = atDockCount;
+            if(kpiCheckedOut) kpiCheckedOut.textContent = checkedOutCount;
+        }
+
+
+        // --- Funções da Interface do MOTORISTA ---
+        function resetDriverView() {
+            activeDriverPlate = null; activeDriverVehicleData = null;
+            driverVehiclePlateInput.value = "";
+            driverPlateInputSection.classList.remove('hidden');
+            driverRouteAcceptanceSection.classList.add('hidden');
+            driverActionsSection.classList.add('hidden');
+            driverPlateError.textContent = ""; 
+            driverActionStatus.textContent = "";
+            driverNotificationArea.classList.add('hidden');
+            stopDriverLoadingTimer();
+        }
+
+        async function handleDriverPlateConfirm() {
+            const plate = driverVehiclePlateInput.value.trim().toUpperCase();
+            driverPlateError.textContent = "";
+            if (!plate) { driverPlateError.textContent = "Informe a placa."; return; }
+
+            driverActionStatus.textContent = "Buscando veículo...";
+            driverActionStatus.className = 'text-md text-center text-blue-500 h-6';
+
+            let vehicle = allVehiclesData.find(v => v.Placa && v.Placa.toUpperCase() === plate);
+            if (!vehicle) {
+                const result = await callAppsScriptAPI('GET', { action: 'getVeiculoByPlaca', placa: plate });
+                if (result && result.success && result.data && result.data.veiculo) {
+                    vehicle = result.data.veiculo;
+                    const existingIndex = allVehiclesData.findIndex(v => v.Placa === vehicle.Placa);
+                    if (existingIndex > -1) allVehiclesData[existingIndex] = vehicle;
+                    else allVehiclesData.push(vehicle);
+                }
+            }
+
+            if (vehicle) {
+                activeDriverPlate = vehicle.Placa;
+                activeDriverVehicleData = vehicle; 
+                driverActionStatus.textContent = ""; 
+                
+                if (vehicle.Status_Veiculo === STATUS_AGUARDANDO_ACEITE) {
+                    showRouteAcceptanceUI();
+                } else {
+                    showDriverActionsUI();
+                }
+            } else {
+                driverPlateError.textContent = "Placa não encontrada. Verifique com o gestor.";
+                driverActionStatus.textContent = "";
+                activeDriverPlate = null; activeDriverVehicleData = null;
+            }
+        }
+
+        function showRouteAcceptanceUI() {
+            driverPlateInputSection.classList.add('hidden');
+            driverActionsSection.classList.add('hidden');
+            driverRouteAcceptanceSection.classList.remove('hidden');
+
+            acceptRoutePlate.textContent = activeDriverVehicleData.Placa;
+            acceptRouteOptimized.textContent = activeDriverVehicleData.Rota_Otimizada_CSV || "N/A";
+            acceptRouteCluster.textContent = activeDriverVehicleData.Cluster_CSV || "N/A";
+            const waveConfig = WAVES_CONFIG.find(w => w.name === activeDriverVehicleData.Onda_CSV);
+            acceptRouteWave.textContent = activeDriverVehicleData.Onda_CSV || "N/A";
+            acceptRouteWaveTime.textContent = waveConfig ? `${waveConfig.start} - ${waveConfig.end}` : "N/A";
+            
+            if (waveConfig) {
+                const waveStartTime = getDateForWaveComparison(waveConfig.start);
+                const bolsaoArrivalTime = new Date(waveStartTime.getTime() - PRE_WAVE_BOLSAO_MINUTES * 60000);
+                driverBolsaoNotificationAcceptance.textContent = `Atenção: Após aceitar, dirija-se ao bolsão. Chegue até ${formatTime(bolsaoArrivalTime, false, false)} (15 min antes da sua onda ${waveConfig.name} às ${waveConfig.start}).`;
+            } else {
+                driverBolsaoNotificationAcceptance.textContent = `Atenção: Após aceitar, dirija-se ao bolsão.`;
+            }
+            driverAcceptRouteStatus.textContent = "";
+        }
+
+        async function handleDriverAcceptRoute() {
+            driverAcceptRouteStatus.textContent = "Processando...";
+            const result = await callAppsScriptAPI('POST', {
+                action: 'aceitarRota',
+                payload: { placa: activeDriverPlate, horarioAceite: currentBrasiliaTime.toISOString() }
+            });
+            if (result && result.success) {
+                driverAcceptRouteStatus.textContent = "Rota aceita!";
+                if(activeDriverVehicleData) activeDriverVehicleData.Status_Veiculo = STATUS_AGUARDANDO_BOLSAO;
+                showDriverActionsUI(); 
+                await fetchInitialData(true); 
+            } else {
+                driverAcceptRouteStatus.textContent = `Erro: ${result ? result.error : "Falha na API"}`;
+            }
+        }
+
+        function showDriverActionsUI() {
+            driverPlateInputSection.classList.add('hidden');
+            driverRouteAcceptanceSection.classList.add('hidden');
+            driverActionsSection.classList.remove('hidden');
+            driverActivePlateDisplay.textContent = activeDriverPlate;
+            updateDriverUI();
+        }
+
+
+        function updateDriverUI() {
+            driverNotificationArea.classList.add('hidden'); 
+            if (!activeDriverVehicleData) {
+                driverVehicleStatus.textContent = '---';
+                driverVehicleWaveCsv.textContent = '---';
+                driverWaveDeadlineDisplay.textContent = '--:-- até --:--';
+                driverRouteOptimizedDisplay.textContent = '---';
+                driverClusterDisplay.textContent = '---';
+                driverAssignedSpot.textContent = '---';
+                // driverCheckinTimeDisplay.textContent = '---'; // Removido da tela do motorista
+                driverLoadingTimerSection.classList.add('hidden'); 
+                driverLoadingTimeRemaining.textContent = '--:--';
+                driverArrivedBolsaoBtn.classList.add('hidden');
+                driverCheckInDocaBtn.classList.add('hidden');
+                driverCheckOutBtn.classList.add('hidden');
+                return;
+            }
+
+            const vehicle = activeDriverVehicleData;
+            driverVehicleStatus.textContent = vehicle.Status_Veiculo ? vehicle.Status_Veiculo.replace(/_/g, ' ') : 'Desconhecido';
+            driverVehicleWaveCsv.textContent = vehicle.Onda_CSV || 'N/A';
+            driverRouteOptimizedDisplay.textContent = vehicle.Rota_Otimizada_CSV || 'N/A';
+            driverClusterDisplay.textContent = vehicle.Cluster_CSV || 'N/A';
+            driverAssignedSpot.textContent = vehicle.Vaga_Atual || (vehicle.Status_Veiculo === STATUS_NO_BOLSAO || vehicle.Status_Veiculo === STATUS_LIBERADO_ENTRADA_DOCA || vehicle.Status_Veiculo === STATUS_CHAMADO_DOCA_AUTO ? `Doca Prev.: ${vehicle.Doca_CSV || 'N/A'}` : 'Aguardando');
+            // driverCheckinTimeDisplay.textContent = vehicle.Horario_Ultimo_CheckIn ? formatDate(vehicle.Horario_Ultimo_CheckIn) : '---'; // Removido da tela
+
+            const waveConfig = WAVES_CONFIG.find(w => w.name === vehicle.Onda_CSV);
+            if (waveConfig) {
+                driverWaveDeadlineDisplay.textContent = `${waveConfig.start} até ${waveConfig.end}`;
+            } else {
+                driverWaveDeadlineDisplay.textContent = 'Onda não definida';
+            }
+            
+            driverArrivedBolsaoBtn.classList.add('hidden');
+            driverCheckInDocaBtn.classList.add('hidden');
+            driverCheckOutBtn.classList.add('hidden');
+            driverLoadingTimerSection.classList.add('hidden'); 
+            stopDriverLoadingTimer();
+
+            switch (vehicle.Status_Veiculo) {
+                case STATUS_AGUARDANDO_BOLSAO:
+                    driverArrivedBolsaoBtn.classList.remove('hidden');
+                    const waveStartTime = waveConfig ? getDateForWaveComparison(waveConfig.start) : null;
+                    if (waveStartTime) {
+                        const notificationTime = new Date(waveStartTime.getTime() - PRE_WAVE_BOLSAO_MINUTES * 60000);
+                        driverNotificationMessage.textContent = `Dirija-se ao bolsão. Esteja lá até ${formatTime(notificationTime, false, false)} (15 min antes da sua onda ${waveConfig.name} às ${waveConfig.start}).`;
+                        driverNotificationArea.classList.remove('hidden');
+                    } else {
+                        driverNotificationMessage.textContent = `Dirija-se ao bolsão e confirme sua chegada.`;
+                        driverNotificationArea.classList.remove('hidden');
+                    }
+                    break;
+                case STATUS_NO_BOLSAO:
+                    driverNotificationMessage.textContent = `Você está no bolsão (chegada: ${vehicle.Horario_Entrada_Bolsao ? formatTime(new Date(vehicle.Horario_Entrada_Bolsao), true, false) : 'N/A'}). Aguarde ser chamado para a doca ${vehicle.Doca_CSV || ''}.`;
+                    driverNotificationArea.classList.remove('hidden');
+                    break;
+                case STATUS_LIBERADO_ENTRADA_DOCA:
+                case STATUS_CHAMADO_DOCA_AUTO:
+                    driverNotificationMessage.textContent = `ATENÇÃO: Entrada liberada! Dirija-se à DOCA ${vehicle.Doca_CSV || 'designada'} para fazer o check-in.`;
+                    driverNotificationArea.classList.remove('hidden');
+                    driverCheckInDocaBtn.classList.remove('hidden'); 
+                    break;
+                case STATUS_NA_VAGA:
+                    driverCheckOutBtn.classList.remove('hidden'); 
+                    driverLoadingTimerSection.classList.remove('hidden');
+                    updateDriverLoadingTimer(); 
+                    break;
+                case STATUS_FINALIZADO:
+                    driverActionStatus.textContent = "Operação finalizada.";
+                    driverNotificationMessage.textContent = `Operação finalizada em ${formatDate(vehicle.Horario_Ultimo_CheckOut)}.`;
+                    driverNotificationArea.classList.remove('hidden');
+                    break;
+                default: 
+                     driverActionStatus.textContent = ""; 
+                     break;
+            }
+        }
+        
+        async function handleDriverArrivedBolsao() {
+            if (!activeDriverPlate) return;
+            driverActionStatus.textContent = "Registrando chegada no bolsão...";
+            const result = await callAppsScriptAPI('POST', {
+                action: 'registrarEntradaBolsao',
+                payload: { placa: activeDriverPlate, horarioEntrada: currentBrasiliaTime.toISOString() }
+            });
+             if (result && result.success) {
+                driverActionStatus.textContent = "Chegada no bolsão registrada!";
+                if(activeDriverVehicleData) activeDriverVehicleData.Status_Veiculo = STATUS_NO_BOLSAO; 
+                updateDriverUI(); 
+                await fetchInitialData(true); 
+            } else {
+                driverActionStatus.textContent = `Erro: ${result ? result.error : "Falha na API"}`;
+            }
+        }
+
+        async function handleDriverCheckInDoca() {
+            if (!activeDriverPlate || !activeDriverVehicleData) { driverActionStatus.textContent = "Nenhuma placa ativa."; return; }
+            
+            const vehicleDoca = activeDriverVehicleData.Doca_CSV;
+            let targetSpotId = null;
+            if (vehicleDoca) {
+                targetSpotId = `V${String(vehicleDoca).padStart(2, '0')}`;
+            }
+
+            let spotToAssign = null;
+            if (targetSpotId) {
+                spotToAssign = allSpotsData.find(s => s.ID_Vaga === targetSpotId && s.Status_Vaga === "Disponível");
+            }
+            
+            if (!spotToAssign) {
+                spotToAssign = allSpotsData.find(s => s.Status_Vaga === "Disponível");
+            }
+
+            if (!spotToAssign) {
+                driverActionStatus.textContent = "Nenhuma vaga disponível no momento.";
+                driverActionStatus.className = 'text-md text-center text-orange-500 h-6';
+                return;
+            }
+
+            driverActionStatus.textContent = "Registrando Check-in na Doca...";
+            driverActionStatus.className = 'text-md text-center text-blue-500 h-6';
+            const checkInTimestamp = currentBrasiliaTime.toISOString();
+            const result = await callAppsScriptAPI('POST', {
+                action: 'registrarCheckInDoca',
+                payload: {
+                    placa: activeDriverPlate,
+                    vagaId: spotToAssign.ID_Vaga,
+                    simulatedTime: checkInTimestamp 
+                }
+            });
+
+            if (result && result.success) {
+                driverActionStatus.textContent = (result.data && result.data.message) || "Check-in na doca realizado!";
+                driverActionStatus.className = 'text-md text-center text-green-500 h-6';
+                if(activeDriverVehicleData) { 
+                    activeDriverVehicleData.Status_Veiculo = STATUS_NA_VAGA;
+                    activeDriverVehicleData.Vaga_Atual = spotToAssign.ID_Vaga;
+                    activeDriverVehicleData.Horario_Ultimo_CheckIn = checkInTimestamp; 
+                }
+                updateDriverUI(); 
+                await fetchInitialData(true); 
+            } else {
+                driverActionStatus.textContent = `Erro Check-in Doca: ${result ? result.error : "Falha na API"}`;
+                driverActionStatus.className = 'text-md text-center text-red-500 h-6';
+            }
+        }
+
+        async function handleDriverCheckOut() {
+            if (!activeDriverPlate) { driverActionStatus.textContent = "Nenhuma placa ativa."; return; }
+
+            driverActionStatus.textContent = "Registrando Check-out...";
+            driverActionStatus.className = 'text-md text-center text-blue-500 h-6';
+            const checkOutTimestamp = currentBrasiliaTime.toISOString();
+            const result = await callAppsScriptAPI('POST', {
+                action: 'registrarCheckOut',
+                payload: {
+                    placa: activeDriverPlate,
+                    simulatedTime: checkOutTimestamp
+                }
+            });
+
+            if (result && result.success) {
+                driverActionStatus.textContent = (result.data && result.data.message) || "Check-out realizado!";
+                driverActionStatus.className = 'text-md text-center text-green-500 h-6';
+                stopDriverLoadingTimer();
+                if(activeDriverVehicleData) {
+                    activeDriverVehicleData.Status_Veiculo = STATUS_FINALIZADO; 
+                    activeDriverVehicleData.Horario_Ultimo_CheckOut = checkOutTimestamp;
+                }
+                updateDriverUI();
+                await fetchInitialData(true); 
+            } else {
+                driverActionStatus.textContent = `Erro Check-out: ${result ? result.error : "Falha na API"}`;
+                driverActionStatus.className = 'text-md text-center text-red-500 h-6';
+            }
+        }
+        
+        function updateDriverLoadingTimer() {
+            if (driverLoadingInterval) clearInterval(driverLoadingInterval);
+            if (!activeDriverVehicleData || activeDriverVehicleData.Status_Veiculo !== STATUS_NA_VAGA || !activeDriverVehicleData.Horario_Ultimo_CheckIn) {
+                driverLoadingTimerSection.classList.remove('hidden'); 
+                driverLoadingTimeRemaining.textContent = '--:--';    
+                return;
+            }
+            driverLoadingTimerSection.classList.remove('hidden');
+            
+            const checkInTime = new Date(activeDriverVehicleData.Horario_Ultimo_CheckIn);
+            const waveConfig = WAVES_CONFIG.find(w => w.name === activeDriverVehicleData.Onda_CSV);
+            
+            if (!waveConfig) { 
+                driverLoadingTimeRemaining.textContent = 'Onda Inválida';
+                driverLoadingTimeRemaining.classList.remove('text-orange-500', 'text-red-500');
+                driverLoadingTimeRemaining.classList.add('text-gray-500');
+                return;
+            }
+            
+            const waveEndTime = getDateForWaveComparison(waveConfig.end);
+            const effectiveLoadingEndTime = waveEndTime; 
+
+
+            function updateTimer() {
+                const remainingMs = effectiveLoadingEndTime - currentBrasiliaTime; 
+                if (remainingMs <= 0) { 
+                    driverLoadingTimeRemaining.textContent = 'Encerrado';
+                    driverLoadingTimeRemaining.classList.remove('text-orange-500');
+                    driverLoadingTimeRemaining.classList.add('text-red-500'); 
+                    clearInterval(driverLoadingInterval);
+                } else {
+                    driverLoadingTimeRemaining.textContent = formatDuration(remainingMs, true); 
+                    driverLoadingTimeRemaining.classList.add('text-orange-500');
+                    driverLoadingTimeRemaining.classList.remove('text-red-500');
+                }
+            }
+            updateTimer(); 
+            driverLoadingInterval = setInterval(updateTimer, 1000);
+        }
+
+        function stopDriverLoadingTimer() {
+            if (driverLoadingInterval) clearInterval(driverLoadingInterval);
+            driverLoadingInterval = null;
+            driverLoadingTimeRemaining.textContent = '--:--';
+        }
+
+        // --- Controle de Visões (Gestor/Motorista) ---
+        function showManagerView() {
+            if (!managerAuthenticated) {
+                const password = prompt("Digite a senha para acessar o Painel do Gestor:");
+                if (password === MANAGER_PASSWORD) {
+                    managerAuthenticated = true;
+                } else {
+                    alert("Senha incorreta!");
+                    if (!activeDriverPlate) {
+                        showDriverView(); 
+                        driverPlateInputSection.classList.remove('hidden');
+                        driverRouteAcceptanceSection.classList.add('hidden');
+                        driverActionsSection.classList.add('hidden');
+                    } else {
+                        const vehicle = allVehiclesData.find(v => v.Placa === activeDriverPlate);
+                        if (vehicle && vehicle.Status_Veiculo === STATUS_AGUARDANDO_ACEITE) {
+                            showRouteAcceptanceUI();
+                        } else if (vehicle) {
+                            showDriverActionsUI();
+                        }
+                    }
+                    return;
+                }
+            }
+            managerViewDiv.classList.remove('hidden');
+            driverViewDiv.classList.add('hidden');
+            managerViewBtn.classList.add('active');
+            driverViewBtn.classList.remove('active');
+            updateManagerUI(); 
+        }
+        function showDriverView() {
+            managerViewDiv.classList.add('hidden');
+            driverViewDiv.classList.remove('hidden');
+            managerViewBtn.classList.remove('active');
+            driverViewBtn.classList.add('active');
+            if (!activeDriverPlate) { 
+                resetDriverView(); 
+            } else {
+                const vehicle = allVehiclesData.find(v => v.Placa === activeDriverPlate);
+                if (vehicle && vehicle.Status_Veiculo === STATUS_AGUARDANDO_ACEITE) {
+                    showRouteAcceptanceUI();
+                } else if (vehicle) { 
+                    showDriverActionsUI();
+                } else { 
+                    resetDriverView();
+                }
+            }
+        }
+        
+        // --- Event Listeners ---
+        refreshDataBtn.addEventListener('click', () => fetchInitialData(false));
+        // simulateTimeBtn foi removido
+        importCsvBtn.addEventListener('click', handleCSVImport);
+        resetDataBtn.addEventListener('click', async () => {
+            if (confirm("Resetar TODOS os dados na Planilha Google?")) {
+                const result = await callAppsScriptAPI('POST', { action: 'resetarDados', payload: {} });
+                if (result && result.success) { 
+                    alert((result.data && result.data.message) || "Dados resetados.");
+                    await fetchInitialData();
+                } else { alert(`Falha: ${result ? result.error : "API Error"}`); }
+            }
+        });
+        initializeSpotsBtn.addEventListener('click', async () => {
+            if (confirm(`Inicializar ${NUM_SPOTS_CONFIG} vagas na planilha?`)) {
+                const result = await callAppsScriptAPI('POST', { action: 'inicializarVagas', payload: { numVagas: NUM_SPOTS_CONFIG } });
+                if (result && result.success) { 
+                    alert((result.data && result.data.message) || "Vagas inicializadas.");
+                    await fetchInitialData(); 
+                } else { alert(`Falha: ${result ? result.error : "API Error"}`); }
+            }
+        });
+        liberarOnda1BolsaoBtn.addEventListener('click', async () => {
+            if (confirm("Liberar TODOS os veículos da ONDA 1 que estão no bolsão para irem para a doca?")) {
+                const result = await callAppsScriptAPI('POST', { action: 'liberarOnda1Bolsao', payload: { horarioLiberacao: currentBrasiliaTime.toISOString() } });
+                 if (result && result.success) {
+                    alert((result.data && result.data.message) || "Veículos da Onda 1 liberados.");
+                    await fetchInitialData(true);
+                } else {
+                    alert(`Falha ao liberar veículos da Onda 1: ${result ? result.error : "Erro na API"}`);
+                }
+            }
+        });
+        openReportsModalBtn.addEventListener('click', () => { renderOperationsReport(); reportsModal.classList.add('active'); });
+        closeReportsModalBtn.addEventListener('click', () => reportsModal.classList.remove('active'));
+        exportOperationsCsvBtn.addEventListener('click', exportReportToCSV);
+        waveSelector.addEventListener('change', (event) => {
+            selectedWaveForManager = event.target.value;
+            updateManagerUI();
+        });
+
+        driverConfirmPlateBtn.addEventListener('click', handleDriverPlateConfirm);
+        driverAcceptRouteBtn.addEventListener('click', handleDriverAcceptRoute);
+        driverRejectRouteBtn.addEventListener('click', resetDriverView);
+        driverChangePlateBtn.addEventListener('click', resetDriverView);
+        driverArrivedBolsaoBtn.addEventListener('click', handleDriverArrivedBolsao);
+        driverCheckInDocaBtn.addEventListener('click', handleDriverCheckInDoca);
+        driverCheckOutBtn.addEventListener('click', handleDriverCheckOut);
+
+        managerViewBtn.addEventListener('click', showManagerView);
+        driverViewBtn.addEventListener('click', showDriverView);
+
+        // --- Inicialização ---
+        async function initializeApp() {
+            showLoading(true);
+            currentBrasiliaTime = getCurrentBrasiliaTime(); 
+            updateHeaderTimeDisplay(); 
+            determineCurrentSystemWave();
+
+            await fetchInitialData(); 
+            showDriverView(); 
+            
+            setInterval(() => { 
+                currentBrasiliaTime = getCurrentBrasiliaTime(); 
+                updateHeaderTimeDisplay();
+                determineCurrentSystemWave(); 
+
+                if (!managerViewDiv.classList.contains('hidden')) { 
+                    updateManagerSpotTimers();
+                }
+                if (!driverViewDiv.classList.contains('hidden') && activeDriverVehicleData) { 
+                    if (activeDriverVehicleData.Status_Veiculo === STATUS_NA_VAGA) {
+                        // O timer de carregamento (updateDriverLoadingTimer) é atualizado pelo seu próprio intervalo
+                    }
+                }
+            }, 1000); 
+
+            if(dataRefreshInterval) clearInterval(dataRefreshInterval);
+            dataRefreshInterval = setInterval(async () => {
+                console.log("Atualização periódica de dados da planilha...");
+                await fetchInitialData(true); 
+            }, 20000); 
+
+
+            showLoading(false);
+            console.log("Aplicativo inicializado.");
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+</html>
